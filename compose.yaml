@@ -1,0 +1,20 @@
+services:
+  bot:
+    build: .
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    volumes:
+      - type: bind
+        source: ./.runtime
+        target: /app/.runtime
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "node", "bin/bot.mjs", "status", "--check"]
+      interval: 15s
+      timeout: 12s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: local

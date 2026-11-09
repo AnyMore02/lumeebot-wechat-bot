@@ -20,3 +20,33 @@ jobs:
       - run: node scripts/prepare-runtime.mjs
       - run: node scripts/verify-smoke.mjs
       - run: node scripts/verify-replies.mjs
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build the Linux image
+        run: |
+          docker compose config -q
+          docker compose build
+      - name: Initialize and start with an isolated fixture key
+        run: |
+          sudo install -d -m 0700 -o 1000 -g 1000 .runtime
+          printf '%s\n' 'ci-fixture-no-network-model' | docker compose run --rm --no-deps -T bot setup --key-stdin
+          docker compose up -d --wait --wait-timeout 210
+          docker compose exec -T bot node bin/bot.mjs status --check
+          docker compose exec -T bot node bin/bot.mjs status | jq -e '.gatewayReady and (.channelEnabled | not) and .selectedGroupCount == 0'
+          container=$(docker compose ps -q bot)
+          test "$(docker compose exec -T bot id -u)" = 1000
+          test "$(docker inspect --format '{{len .HostConfig.PortBindings}}' "$container")" = 0
+      - name: Recreate the container with persisted configuration
+        run: |
+          docker compose up -d --force-recreate --wait --wait-timeout 210
+          docker compose exec -T bot node bin/bot.mjs status --check
+          docker compose exec -T bot node bin/bot.mjs status | jq -e '.gatewayReady and (.channelEnabled | not) and .selectedGroupCount == 0'
+      - name: Print logs if the smoke test fails
+        if: failure()
+        run: docker compose logs --no-color --tail=120 bot
+      - name: Stop the test container
+        if: always()
+        run: docker compose down

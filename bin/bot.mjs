@@ -6,6 +6,7 @@ import path from 'node:path';
 import { Writable } from 'node:stream';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const runtime = path.join(root, '.runtime');
@@ -19,12 +20,13 @@ const wxToken = path.join(wxDir, 'api-token');
 const portsPath = path.join(runtime, 'ports.json');
 const modePath = path.join(runtime, 'mode');
 const win = process.platform === 'win32';
-const wx = path.join(runtime, 'bin', win ? 'wx.exe' : 'wx');
+const wx = process.env.LUMEEBOT_WX_BINARY || path.join(runtime, 'bin', win ? 'wx.exe' : 'wx');
 const openclaw = path.join(root, 'node_modules', 'openclaw', 'openclaw.mjs');
 const plugin = path.join(root, 'node_modules', '@agent-wechat', 'agent-wechat');
 const channel = 'agent-wechat';
 const agent = 'wechat-trial';
 const groupPattern = /^[^\s@*]+@chatroom$/;
+const gatewayArgs = ['--stack-size=8192', openclaw, 'gateway', 'run'];
 
 const help = `Lumeebot 微信群机器人
 
@@ -32,9 +34,10 @@ const help = `Lumeebot 微信群机器人
   node bin/bot.mjs wx <原生命令及参数>
   node bin/bot.mjs groups <微信 accountId> <群ID@chatroom> [其他群ID...]
   node bin/bot.mjs gateway
+  node bin/bot.mjs start
   node bin/bot.mjs pause
   node bin/bot.mjs resume
-  node bin/bot.mjs status
+  node bin/bot.mjs status [--check]
   node bin/bot.mjs openclaw <诊断命令及参数>
 
 setup 通过隐藏输入读取 DeepSeek API Key，也支持 DEEPSEEK_API_KEY 或 --key-stdin。
@@ -127,7 +130,7 @@ function requireServer() {
 }
 
 function checkInstall() {
-  if (!fs.existsSync(openclaw) || !fs.existsSync(wx) || !fs.existsSync(path.join(plugin, 'openclaw.plugin.json'))) {
+  if (!path.isAbsolute(wx) || !fs.existsSync(openclaw) || !fs.existsSync(wx) || !fs.existsSync(path.join(plugin, 'openclaw.plugin.json'))) {
     throw new Error('依赖尚未准备好，请先执行 npm ci 和 node scripts/prepare-runtime.mjs。');
   }
   const patchedFiles = [
@@ -347,15 +350,78 @@ async function chooseGroups([accountId, ...ids]) {
   console.log(`已配置 ${selected.length} 个群。网关启动或重新加载后生效。`);
 }
 
-async function status() {
-  const current = config();
-  const { gateway } = ports();
-  const wechat = current.channels?.[channel];
-  const ready = await fetch(`http://127.0.0.1:${gateway}/readyz`, { signal: AbortSignal.timeout(2000), redirect: 'error' })
+function gatewayReady(port) {
+  return fetch(`http://127.0.0.1:${port}/readyz`, { signal: AbortSignal.timeout(2000), redirect: 'error' })
     .then((response) => response.ok ? response.json() : null)
     .then((body) => body?.ready === true)
     .catch(() => false);
+}
+
+function wxReady(port) {
+  return nativeJson(port, '/v1/accounts').then(() => true, () => false);
+}
+
+async function status(args) {
+  if (args.length === 1 && args[0] === '--check') {
+    const { gateway, wx: wxPort } = ports();
+    const [gatewayOnline, wxOnline] = await Promise.all([gatewayReady(gateway), wxReady(wxPort)]);
+    if (!gatewayOnline || !wxOnline) throw new Error('OpenClaw 网关或微信服务尚未就绪。');
+    return;
+  }
+  if (args.length) throw new Error('status 仅接受 --check。');
+  const wechat = config().channels?.[channel];
+  const ready = await gatewayReady(ports().gateway);
   console.log(JSON.stringify({ mode: mode(), gatewayReady: ready, channelEnabled: wechat?.enabled === true, selectedGroupCount: Object.entries(wechat?.groups ?? {}).filter(([id, setting]) => id !== '*' && setting?.enabled).length }, null, 2));
+}
+
+async function startServices(args) {
+  if (args.length) throw new Error('start 不接受覆盖参数。');
+  if (win) throw new Error('start 用于 Linux 容器。Windows 请分别启动微信服务和网关。');
+  requireServer();
+  config();
+  checkInstall();
+  const { wx: wxPort } = ports();
+  const shutdown = new AbortController();
+  const stop = () => shutdown.abort();
+  const children = [];
+  let exitCode = 0;
+
+  const start = (name, file, childArgs) => {
+    const child = spawn(file, childArgs, { cwd: root, env: childEnv(), stdio: 'inherit' });
+    const terminate = () => {
+      if (child.pid && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
+    };
+    shutdown.signal.addEventListener('abort', terminate, { once: true });
+    child.once('error', (error) => console.error(`${name}: ${error.message}`));
+    children.push(new Promise((resolve) => child.once('close', (code, signal) => {
+      shutdown.signal.removeEventListener('abort', terminate);
+      if (!shutdown.signal.aborted) {
+        console.error(`${name} 意外退出（${code ?? signal}）。`);
+        exitCode = 1;
+        stop();
+      }
+      resolve();
+    })));
+  };
+
+  process.once('SIGTERM', stop);
+  process.once('SIGINT', stop);
+  try {
+    start('wx', wx, [...nativeArgs(wxPort), 'serve']);
+    const deadline = Date.now() + 60_000;
+    while (!shutdown.signal.aborted && !(await wxReady(wxPort))) {
+      if (Date.now() >= deadline) throw new Error('微信服务启动超时。');
+      await delay(500);
+    }
+    if (!shutdown.signal.aborted) start('OpenClaw', process.execPath, gatewayArgs);
+    await Promise.all(children);
+    return exitCode;
+  } finally {
+    stop();
+    await Promise.all(children);
+    process.removeListener('SIGTERM', stop);
+    process.removeListener('SIGINT', stop);
+  }
 }
 
 function runForeground(file, args, stdio = 'inherit') {
@@ -417,12 +483,13 @@ try {
       await chooseGroups([wechat?.native?.accountId, ...selected]);
       break;
     }
-    case 'status': await status(); break;
+    case 'status': await status(args); break;
+    case 'start': process.exitCode = await startServices(args); break;
     case 'gateway':
       if (args.length) throw new Error('gateway 不接受覆盖参数。');
       config();
       checkInstall();
-      process.exitCode = await runForeground(process.execPath, ['--stack-size=8192', openclaw, 'gateway', 'run']);
+      process.exitCode = await runForeground(process.execPath, gatewayArgs);
       break;
     case 'wx': {
       requireServer();

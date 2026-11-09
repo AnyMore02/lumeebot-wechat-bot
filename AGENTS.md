@@ -1,6 +1,6 @@
 # 安装交接
 
-先读 [README](README.md)。检查目标系统、CPU 架构和 Node.js 版本，使用仓库根目录的统一命令行流程。只有带交互桌面的 Windows 才考虑 `windows/` 的可选界面。
+先读 [README](README.md)，核对目标系统和 CPU 架构。Linux 服务器如使用 Docker Compose，按 [服务器托管说明](deploy/README.md) 构建和运行。原生部署需检查 Node.js 版本，再用仓库根目录的命令行流程。只有带交互桌面的 Windows 才考虑 `windows/` 的可选界面。
 
 遵守 `package-lock.json` 和 wx 校验值。运行 `npm ci` 及 `node scripts/prepare-runtime.mjs` 后再生成配置。保持运行状态位于当前工作目录的 `.runtime/`，避免接入或改动现有全局 OpenClaw 服务。API Key 由运行者在目标机录入，微信扫码也由账号持有人操作。
 

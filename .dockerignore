@@ -1,0 +1,15 @@
+**
+!package.json
+!package-lock.json
+!patches/
+!patches/*.mjs
+!patches/*.json
+!scripts/
+!scripts/prepare-runtime.mjs
+!bin/
+!bin/bot.mjs
+!workspace/
+!workspace/AGENTS.md
+!workspace/IDENTITY.md
+!workspace/SOUL.md
+!workspace/USER.md

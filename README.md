@@ -2,17 +2,17 @@
 
 让 Lumeebot 小羊在指定微信群中回答问题。支持多选群，普通消息无需 @，每个群各自保留会话。产品知识、人设、微信插件修复和 OpenClaw 的图片回复冲突修复都在这个仓库的安装流程中。
 
-服务器可以用统一的命令行入口。带桌面的 Windows 也可以使用图形启动器。
+Linux 服务器可使用 [Docker Compose 部署](deploy/README.md#linux-docker-compose)。下文是 Linux 和 Windows 的原生安装流程，带桌面的 Windows 也可使用图形启动器。
 
 ## 安装前确认
 
-- Windows x64 / ARM64，或 Linux x64 / ARM64。Linux 需要 glibc 2.36 或更新版本，例如 Debian 12 或 Ubuntu 24.04。wx 1.2.0 的 Linux 发行包使用 GNU ABI。 [原生程序平台说明](https://github.com/thisnick/agent-wechat/blob/33ec6b2cf42e364d8a30d907666de976ad9f6de61efb1/PLATFORM-ACCEPTANCE.md)
+- Windows x64 / ARM64，或 Linux x64 / ARM64。Linux 需要 glibc 2.36 或更新版本，例如 Debian 12 或 Ubuntu 24.04。wx 1.2.0 的 Linux 发行包使用 GNU ABI。 [原生程序平台说明](https://github.com/thisnick/agent-wechat/blob/v1.2.0/PLATFORM-ACCEPTANCE.md)
 - 安装 Git 和 Node.js 24.22.1 以上的 24.x，或 Node.js 26.12.1 及更新版本，确保 `node` 和 `npm` 在当前终端可用。安装需要访问 npm 和 GitHub Releases。 [Node.js 下载](https://nodejs.org/en/download)
 - 准备使用者自己的 DeepSeek API Key，以及已经加入目标群的微信账号。首次登录由微信账号持有人在手机上扫码并确认。 [DeepSeek API 文档](https://api-docs.deepseek.com/zh-cn/api_samples/chat_curl/) · [微信插件说明](https://github.com/thisnick/agent-wechat)
 
 ## 1. 下载并准备运行环境
 
-用将来实际运行机器人的系统用户执行。私有仓库需要先给安装者读取权限。
+用将来实际运行机器人的系统用户执行。
 
 ```sh
 git clone https://github.com/AnyMore02/lumeebot-wechat-bot.git
