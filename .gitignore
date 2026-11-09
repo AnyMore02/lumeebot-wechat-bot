@@ -1,0 +1,12 @@
+node_modules/
+.runtime/
+.env
+.env.*
+*.log
+*.sqlite*
+*.db
+*.bak*
+*.tmp
+*.zip
+*.tgz
+*.exe

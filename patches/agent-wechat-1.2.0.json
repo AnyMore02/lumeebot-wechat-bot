@@ -1,0 +1,315 @@
+{
+  "upstream": "182d4980d2633cb5b303c3e44014de70476401f93d711bc9acfde0876993f698",
+  "deployed": "1b40583ab041195c5c1fd0893340441d05fa19296bbf7842807f5a1458d9b90b",
+  "hunks": [
+    {
+      "offset": 2513,
+      "before": [
+        "      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16 * 1024 * 1024 || stat.mode & 63) throw new Error(\"Native consumer state is not a bounded private regular file\");"
+      ],
+      "after": [
+        "      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16 * 1024 * 1024 || process.platform !== \"win32\" && stat.mode & 63) throw new Error(\"Native consumer state is not a bounded private regular file\");"
+      ]
+    },
+    {
+      "offset": 2557,
+      "before": [
+        "    if (!stat.isDirectory() || stat.isSymbolicLink() || stat.mode & 63) throw new Error(\"Native consumer directory must be private (0700)\");"
+      ],
+      "after": [
+        "    if (!stat.isDirectory() || stat.isSymbolicLink() || process.platform !== \"win32\" && stat.mode & 63) throw new Error(\"Native consumer directory must be private (0700)\");"
+      ]
+    },
+    {
+      "offset": 2569,
+      "before": [
+        "      const directoryFd = openSync(directory, \"r\");",
+        "      try {",
+        "        fsyncSync(directoryFd);",
+        "      } finally {",
+        "        closeSync(directoryFd);"
+      ],
+      "after": [
+        "      if (process.platform !== \"win32\") {",
+        "        const directoryFd = openSync(directory, \"r\");",
+        "        try {",
+        "          fsyncSync(directoryFd);",
+        "        } finally {",
+        "          closeSync(directoryFd);",
+        "        }"
+      ]
+    },
+    {
+      "offset": 2878,
+      "before": [
+        "async function acceptNativeEvent(client, accountId, state, event) {"
+      ],
+      "after": [
+        "var NATIVE_SKIPPED_MEDIA_TYPES = new Set([3, 34, 43, 47]);",
+        "function buildNativeThreadPrefilter(cfg) {",
+        "  const channel2 = cfg?.channels?.[\"agent-wechat\"];",
+        "  if (!channel2) return () => true;",
+        "  const groups = channel2.groups;",
+        "  const dmEnabled = channel2.dmPolicy !== \"disabled\";",
+        "  if (!groups || typeof groups !== \"object\" || !Object.keys(groups).length) return () => true;",
+        "  if (groups[\"*\"]?.enabled === true) return () => true;",
+        "  const enabledGroups = /* @__PURE__ */ new Set();",
+        "  for (const [id, value] of Object.entries(groups)) if (id !== \"*\" && value?.enabled !== false) enabledGroups.add(id);",
+        "  return (threadId) => {",
+        "    const id = typeof threadId === \"string\" ? threadId : \"\";",
+        "    if (!id) return true;",
+        "    if (id.endsWith(\"@chatroom\") || id.endsWith(\"@openim\")) return enabledGroups.has(id);",
+        "    return dmEnabled;",
+        "  };",
+        "}",
+        "async function acceptNativeEvent(client, accountId, state, event, mightServeThread = () => true) {"
+      ]
+    },
+    {
+      "offset": 2888,
+      "before": [],
+      "after": [
+        "    const origin4 = typeof event.data.origin === \"string\" ? event.data.origin : \"unknown\";",
+        "    const historicalCatchup = origin4 === \"catchup\" && !state.get(event.data.messageId);",
+        "    if (event.data.direction === \"outgoing\" || historicalCatchup || !mightServeThread(event.data.threadId)) {",
+        "      state.accept(event.cursor, void 0, origin4);",
+        "      return void 0;",
+        "    }"
+      ]
+    },
+    {
+      "offset": 2922,
+      "before": [],
+      "after": [
+        "function nativeErrorFacts(error) {",
+        "  const code = typeof error?.code === \"string\" && /^[a-zA-Z0-9_]{1,64}$/.test(error.code) ? error.code : void 0;",
+        "  const name = typeof error?.name === \"string\" && /^[A-Za-z0-9_$]{1,64}$/.test(error.name) ? error.name : void 0;",
+        "  const kind = typeof error?.constructor?.name === \"string\" && /^[A-Za-z0-9_$]{1,64}$/.test(error.constructor.name) ? error.constructor.name : void 0;",
+        "  return { kind, name, code, status: Number.isInteger(error?.status) ? error.status : void 0 };",
+        "}",
+        "function isTransientNativeRead(error) {",
+        "  if (error?.name === \"TimeoutError\" || error?.name === \"AbortError\") return true;",
+        "  if (error?.code === \"request_failed\" && [429, 502, 503, 504].includes(error?.status)) return true;",
+        "  return error instanceof NativeApiError && (error.retryable === true || [429, 502, 503, 504].includes(error.status));",
+        "}",
+        "async function nativeReadWithRetry(read, log) {",
+        "  for (let attempt = 1; ; attempt++) {",
+        "    try {",
+        "      return await read();",
+        "    } catch (error) {",
+        "      if (attempt >= 2 || !isTransientNativeRead(error)) {",
+        "        log?.error?.(\"[wechat-read] \" + JSON.stringify({ attempt, ...nativeErrorFacts(error) }));",
+        "        throw error;",
+        "      }",
+        "      log?.warn?.(\"[wechat-read] \" + JSON.stringify({ retry: attempt, ...nativeErrorFacts(error) }));",
+        "    }",
+        "  }",
+        "}"
+      ]
+    },
+    {
+      "offset": 2930,
+      "before": [],
+      "after": [
+        "    params.log?.error?.(\"[wechat-pre-model] \" + JSON.stringify({ stage: \"dispatch_pre_model\", ...nativeErrorFacts(error), custody: item?.state ?? null }));"
+      ]
+    },
+    {
+      "offset": 2948,
+      "before": [],
+      "after": [
+        "  if (NATIVE_SKIPPED_MEDIA_TYPES.has(message.type)) {",
+        "    params.log?.info?.(\"[wechat-skip] \" + JSON.stringify({ type: message.type, reason: \"media_unreplied\" }));",
+        "    state.update(message.id, { state: \"ignored\" }, revision);",
+        "    return \"ignored\";",
+        "  }"
+      ]
+    },
+    {
+      "offset": 2997,
+      "before": [
+        "  await recheck([message]);"
+      ],
+      "after": [
+        "  assertCurrent();",
+        "  if (message.type !== 1 || message.quote) await nativeReadWithRetry(() => recheck([message]), params.log);"
+      ]
+    },
+    {
+      "offset": 3001,
+      "before": [
+        "  await recheck([message]);"
+      ],
+      "after": [
+        "  assertCurrent();",
+        "  if (message.type !== 1 || message.quote) await nativeReadWithRetry(() => recheck([message]), params.log);"
+      ]
+    },
+    {
+      "offset": 3023,
+      "before": [
+        "  await recheck([message, ...admitted]);"
+      ],
+      "after": [
+        "  if (admitted.length || message.type !== 1 || message.quote) await nativeReadWithRetry(() => recheck([message, ...admitted]), params.log);"
+      ]
+    },
+    {
+      "offset": 3063,
+      "before": [
+        "  await recheck([message, ...admitted]);"
+      ],
+      "after": [
+        "  if (admitted.length || message.type !== 1 || message.quote) await nativeReadWithRetry(() => recheck([message, ...admitted]), params.log);"
+      ]
+    },
+    {
+      "offset": 3080,
+      "before": [
+        "  const beforeSend = () => recheck([message, ...admitted]);"
+      ],
+      "after": [
+        "  const beforeSend = () => {",
+        "    if (message.type === 1 && !message.quote) {",
+        "      assertCurrent();",
+        "      if (state.isRecalled(message)) throw new NativeInputInvalidated();",
+        "      return;",
+        "    }",
+        "    return nativeReadWithRetry(() => recheck([message, ...admitted]), params.log);",
+        "  };"
+      ]
+    },
+    {
+      "offset": 3083,
+      "before": [],
+      "after": [
+        "  let deliveryStage = \"model_dispatch\";"
+      ]
+    },
+    {
+      "offset": 3092,
+      "before": [],
+      "after": [
+        "          deliveryStage = \"pre_send_recheck\";"
+      ]
+    },
+    {
+      "offset": 3100,
+      "before": [],
+      "after": [
+        "            deliveryStage = \"attachment_send\";"
+      ]
+    },
+    {
+      "offset": 3103,
+      "before": [],
+      "after": [
+        "            deliveryStage = \"pre_submit_recheck\";"
+      ]
+    },
+    {
+      "offset": 3105,
+      "before": [],
+      "after": [
+        "            deliveryStage = \"text_submit\";"
+      ]
+    },
+    {
+      "offset": 3109,
+      "before": [
+        "        onError: () => {"
+      ],
+      "after": [
+        "        onError: (error) => {"
+      ]
+    },
+    {
+      "offset": 3111,
+      "before": [],
+      "after": [
+        "          params.log?.error?.(\"[wechat-delivery] \" + JSON.stringify({ stage: deliveryStage, ...nativeErrorFacts(error) }));"
+      ]
+    },
+    {
+      "offset": 3129,
+      "before": [
+        "  } catch {"
+      ],
+      "after": [
+        "  } catch (error) {"
+      ]
+    },
+    {
+      "offset": 3131,
+      "before": [],
+      "after": [
+        "    params.log?.error?.(\"[wechat-delivery] \" + JSON.stringify({ stage: deliveryStage, ...nativeErrorFacts(error) }));"
+      ]
+    },
+    {
+      "offset": 3135,
+      "before": [
+        "async function synchronizeNativeEvents(client, accountId, state) {"
+      ],
+      "after": [
+        "async function synchronizeNativeEvents(client, accountId, state, mightServeThread = () => true) {"
+      ]
+    },
+    {
+      "offset": 3140,
+      "before": [
+        "    for (const event of page.items) await acceptNativeEvent(client, accountId, state, event);"
+      ],
+      "after": [
+        "    for (const event of page.items) await acceptNativeEvent(client, accountId, state, event, mightServeThread);"
+      ]
+    },
+    {
+      "offset": 3172,
+      "before": [],
+      "after": [
+        "  const mightServeThread = buildNativeThreadPrefilter(core.config.current());"
+      ]
+    },
+    {
+      "offset": 3193,
+      "before": [],
+      "after": [
+        "        log: opts.log,"
+      ]
+    },
+    {
+      "offset": 3241,
+      "before": [
+        "        await synchronizeNativeEvents(host2.client, native.accountId, state);"
+      ],
+      "after": [
+        "        await synchronizeNativeEvents(host2.client, native.accountId, state, mightServeThread);"
+      ]
+    },
+    {
+      "offset": 3245,
+      "before": [
+        "          const message = await acceptNativeEvent(host2.client, native.accountId, state, event);"
+      ],
+      "after": [
+        "          const message = await acceptNativeEvent(host2.client, native.accountId, state, event, mightServeThread);"
+      ]
+    },
+    {
+      "offset": 3559,
+      "before": [],
+      "after": [
+        "    // OpenClaw otherwise reuses default's previous linked=false and skips the",
+        "    // native consumer even after explicit authentication has succeeded again.",
+        "    isLinked: async (account) => {",
+        "      if (!account?.native) return \"not-linked\";",
+        "      const { client } = await ensureNativeHost(account.native);",
+        "      const status = await client.account(account.native.accountId);",
+        "      if (status.id !== account.native.accountId) throw new Error(\"Native account identity does not match the configured account\");",
+        "      return status.authenticated === true && status.connection === \"online\" ? \"linked\" : \"not-linked\";",
+        "    },"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "lumeebot-wechat-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.22.1 <25 || >=26.12.1"
+  },
+  "scripts": {
+    "prepare:runtime": "node scripts/prepare-runtime.mjs",
+    "bot": "node bin/bot.mjs"
+  },
+  "dependencies": {
+    "@agent-wechat/agent-wechat": "1.2.0",
+    "openclaw": "2026.10.7"
+  }
+}
